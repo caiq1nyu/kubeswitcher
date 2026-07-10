@@ -18,6 +18,7 @@ final class AppViewModel: ObservableObject {
     @Published var deleteTarget: EnvironmentRecord?
     @Published var alertMessage: String?
     @Published var toastMessage: String?
+    @Published var appliedNamespace: String?
     @Published var isBusy = false
     @Published var appPreferences: AppPreferences
 
@@ -26,6 +27,8 @@ final class AppViewModel: ObservableObject {
     private var activator: EnvironmentActivator
     private var namespacePreviewTask: Task<Void, Never>?
     private var toastTask: Task<Void, Never>?
+    private var kubeConfigMonitorTask: Task<Void, Never>?
+    private var lastKubeConfigModificationDate: Date?
     var onHotKeyPreferenceChanged: ((HotKeyPreference) -> Void)?
 
     var l10n: L10n { L10n(language: settings.language) }
@@ -103,6 +106,7 @@ final class AppViewModel: ObservableObject {
             settings = try store.loadSettings()
             selectedID = settings.activeEnvironmentID ?? environments.first?.id
             resetNamespacePreviewState()
+            await refreshAppliedNamespaceFromDefaultKubeConfig(force: true)
         } catch {
             alertMessage = error.localizedDescription
         }
@@ -129,6 +133,8 @@ final class AppViewModel: ObservableObject {
             kubeConfigPath: preferences.resolvedKubeConfigURL
         )
         showingSettings = false
+        lastKubeConfigModificationDate = nil
+        Task { await refreshAppliedNamespaceFromDefaultKubeConfig(force: true) }
         if oldDataDirectory != newDataDirectory {
             alertMessage = l10n.text(.dataDirectoryRestartNotice)
         }
@@ -177,6 +183,35 @@ final class AppViewModel: ObservableObject {
         }
     }
 
+    func startDefaultKubeConfigMonitor() {
+        kubeConfigMonitorTask?.cancel()
+        kubeConfigMonitorTask = Task { [weak self] in
+            await self?.refreshAppliedNamespaceFromDefaultKubeConfig(force: true)
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
+                await self?.refreshAppliedNamespaceFromDefaultKubeConfig(force: false)
+            }
+        }
+    }
+
+    func refreshAppliedNamespaceFromDefaultKubeConfig(force: Bool = false) async {
+        guard settings.activeEnvironmentID != nil else {
+            appliedNamespace = nil
+            return
+        }
+
+        let kubeConfigURL = appPreferences.resolvedKubeConfigURL
+        let modificationDate = (try? FileManager.default.attributesOfItem(atPath: kubeConfigURL.path)[.modificationDate]) as? Date
+        guard force || modificationDate != lastKubeConfigModificationDate else { return }
+        lastKubeConfigModificationDate = modificationDate
+
+        do {
+            appliedNamespace = try await kubectl.currentNamespace(kubeConfigPath: kubeConfigURL) ?? "default"
+        } catch {
+            appliedNamespace = "default"
+        }
+    }
+
     private func showToast(_ message: String) {
         toastTask?.cancel()
         toastMessage = message
@@ -216,6 +251,7 @@ final class AppViewModel: ObservableObject {
         environments = try store.loadEnvironments()
         settings = try store.loadSettings()
         selectedID = id
+        await refreshAppliedNamespaceFromDefaultKubeConfig(force: true)
         namespaceLoadError = result.namespaceRefreshError
         namespaceLoadingEnvironmentID = nil
     }

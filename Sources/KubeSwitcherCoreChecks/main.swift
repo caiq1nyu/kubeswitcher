@@ -159,6 +159,12 @@ struct KubeSwitcherCoreChecks {
         try check(try harness.store.loadSettings().activeNamespace == "production", "activation should persist active namespace")
     }
 
+    private static func currentNamespaceIsParsedFromCurrentContext() throws {
+        let data = Data(SampleConfigs.withNamespace.utf8)
+        let namespace = try KubeConfigSummaryParser.currentNamespace(from: data)
+        try check(namespace == "kb-system", "current namespace should come from current context")
+    }
+
     private static func namespacePreviewDoesNotApplyKubeconfig() async throws {
         let harness = try TestHarness()
         harness.kubectl.validationResult = .success(
@@ -341,6 +347,8 @@ private final class FakeKubectlClient: KubectlClientProtocol {
     var namespaceListError: Error?
     var listedNamespacesForConfig: String?
     var listedNamespacesForPath: URL?
+    var currentNamespaceResult: String?
+    var currentNamespacePath: URL?
 
     func validate(kubeConfig: String, sourceType: KubeConfigSourceType) async throws -> KubeConfigSummary {
         switch validationResult {
@@ -377,6 +385,11 @@ private final class FakeKubectlClient: KubectlClientProtocol {
             KubeNamespace(name: "production", status: "Active")
         ]
     }
+
+    func currentNamespace(kubeConfigPath: URL) async throws -> String? {
+        currentNamespacePath = kubeConfigPath
+        return currentNamespaceResult
+    }
 }
 
 private enum SampleConfigs {
@@ -394,6 +407,19 @@ private enum SampleConfigs {
     current-context: sample-context
     users:
     - name: sample-user
+    """
+
+    static let withNamespace = """
+    {
+      "current-context": "dev",
+      "clusters": [
+        { "name": "dev-cluster", "cluster": { "server": "https://127.0.0.1:6443" } }
+      ],
+      "contexts": [
+        { "name": "dev", "context": { "cluster": "dev-cluster", "user": "dev-user", "namespace": "kb-system" } },
+        { "name": "other", "context": { "cluster": "dev-cluster", "user": "dev-user", "namespace": "mjingz" } }
+      ]
+    }
     """
 
     static let production = """

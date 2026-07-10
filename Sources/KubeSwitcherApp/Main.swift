@@ -36,6 +36,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
         Task {
             await viewModel.refresh()
+            viewModel.startDefaultKubeConfigMonitor()
             registerHotKey(viewModel.settings.hotKey)
         }
     }

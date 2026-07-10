@@ -94,7 +94,7 @@ struct KubeSwitcherRootView: View {
         guard viewModel.appliedEnvironment != nil else {
             return viewModel.l10n.text(.noEnvironmentApplied)
         }
-        let namespace = viewModel.settings.activeNamespace?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let namespace = viewModel.appliedNamespace?.trimmingCharacters(in: .whitespacesAndNewlines)
         return namespace?.isEmpty == false ? namespace! : "default"
     }
 

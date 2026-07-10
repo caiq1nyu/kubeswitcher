@@ -5,6 +5,7 @@ public protocol KubectlClientProtocol: AnyObject {
     func kubeConfig(_ kubeConfig: String, settingNamespace namespace: String) async throws -> String
     func listNamespaces(kubeConfig: String) async throws -> [KubeNamespace]
     func listNamespaces(kubeConfigPath: URL) async throws -> [KubeNamespace]
+    func currentNamespace(kubeConfigPath: URL) async throws -> String?
 }
 
 public final class KubectlClient: KubectlClientProtocol, @unchecked Sendable {
@@ -50,6 +51,12 @@ public final class KubectlClient: KubectlClientProtocol, @unchecked Sendable {
         let path = try writeTemporaryConfig(kubeConfig)
         defer { try? fileManager.removeItem(at: path.deletingLastPathComponent()) }
         return try await listNamespaces(kubeConfigPath: path)
+    }
+
+    public func currentNamespace(kubeConfigPath: URL) async throws -> String? {
+        let output = try await runKubectl(["--kubeconfig", kubeConfigPath.path, "config", "view", "--minify", "-o", "json"])
+        let data = Data(output.utf8)
+        return try KubeConfigSummaryParser.currentNamespace(from: data)
     }
 
     private func writeTemporaryConfig(_ kubeConfig: String) throws -> URL {
@@ -179,6 +186,17 @@ public enum KubeConfigSummaryParser {
             throw KubeSwitcherError.invalidKubeConfig(error.localizedDescription)
         }
     }
+
+    public static func currentNamespace(from data: Data) throws -> String? {
+        do {
+            let view = try JSONDecoder().decode(KubeConfigView.self, from: data)
+            return try view.currentNamespace()
+        } catch let error as KubeSwitcherError {
+            throw error
+        } catch {
+            throw KubeSwitcherError.invalidKubeConfig(error.localizedDescription)
+        }
+    }
 }
 
 private struct KubeConfigView: Decodable {
@@ -208,6 +226,17 @@ private struct KubeConfigView: Decodable {
         case clusters
         case contexts
         case currentContext = "current-context"
+    }
+
+    func currentNamespace() throws -> String? {
+        guard let currentContext, !currentContext.isEmpty else {
+            throw KubeSwitcherError.invalidKubeConfig("missing current-context")
+        }
+        guard let selectedContext = contexts.first(where: { $0.name == currentContext }) else {
+            throw KubeSwitcherError.invalidKubeConfig("current-context does not match any context")
+        }
+        let namespace = selectedContext.context.namespace?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return namespace?.isEmpty == false ? namespace : nil
     }
 
     func summary(sourceType: KubeConfigSourceType) throws -> KubeConfigSummary {
