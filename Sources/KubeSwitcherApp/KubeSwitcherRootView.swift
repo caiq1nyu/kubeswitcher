@@ -3,6 +3,17 @@ import KubeSwitcherCore
 import SwiftUI
 import UniformTypeIdentifiers
 
+private enum AppTheme {
+    static let accent = Color(red: 0.03, green: 0.43, blue: 0.86)
+    static let accentBlue = Color(red: 0.15, green: 0.55, blue: 0.95)
+    static let canvas = Color(nsColor: .windowBackgroundColor)
+    static let sidebar = Color(nsColor: .controlBackgroundColor).opacity(0.62)
+    static let surface = Color(nsColor: .textBackgroundColor)
+    static let control = Color(nsColor: .controlBackgroundColor).opacity(0.72)
+    static let border = Color.primary.opacity(0.075)
+    static let mutedText = Color.primary.opacity(0.52)
+}
+
 struct KubeSwitcherRootView: View {
     @ObservedObject var viewModel: AppViewModel
 
@@ -19,24 +30,27 @@ struct KubeSwitcherRootView: View {
                 }
             }
             if viewModel.showingEditor {
-                Color.black.opacity(0.30)
+                Color.black.opacity(0.22)
                     .ignoresSafeArea()
                 EnvironmentEditorView(viewModel: viewModel, record: viewModel.editingRecord)
-                    .frame(width: 560)
-                    .shadow(radius: 18)
+                    .frame(width: 620)
+                    .frame(maxHeight: 560)
+                    .shadow(color: .black.opacity(0.16), radius: 28, y: 12)
             }
             if viewModel.showingSettings {
-                Color.black.opacity(0.30)
+                Color.black.opacity(0.22)
                     .ignoresSafeArea()
                 SettingsView(viewModel: viewModel)
                     .frame(width: 560)
-                    .shadow(radius: 18)
+                    .frame(maxHeight: 540)
+                    .shadow(color: .black.opacity(0.16), radius: 28, y: 12)
             }
             if let message = viewModel.toastMessage {
                 toastView(message)
             }
         }
-        .background(Color(nsColor: .windowBackgroundColor))
+        .tint(AppTheme.accent)
+        .background(AppTheme.canvas)
         .alert("KubeSwitcher", isPresented: Binding(
             get: { viewModel.alertMessage != nil },
             set: { if !$0 { viewModel.alertMessage = nil } }
@@ -48,46 +62,55 @@ struct KubeSwitcherRootView: View {
     }
 
     private var titleBar: some View {
-        HStack {
-            Image(systemName: "shippingbox.circle.fill")
-                .foregroundStyle(.indigo)
-                .font(.system(size: 17, weight: .semibold))
+        HStack(spacing: 10) {
+            Image(systemName: "shippingbox.fill")
+                .foregroundStyle(AppTheme.accent)
+                .font(.system(size: 13, weight: .semibold))
+                .frame(width: 28, height: 28)
+                .background(AppTheme.accent.opacity(0.10), in: RoundedRectangle(cornerRadius: 8))
             Text("KubeSwitcher")
-                .font(.headline.weight(.semibold))
-                .foregroundStyle(.primary.opacity(0.9))
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(.primary.opacity(0.88))
             Spacer()
             HStack(spacing: 8) {
                 statusPill(
                     label: viewModel.l10n.text(.currentEnvironment),
                     value: viewModel.appliedEnvironment?.name ?? viewModel.l10n.text(.noEnvironmentApplied),
                     systemImage: "switch.2",
-                    accent: .indigo
+                    accent: AppTheme.accent
                 )
                 statusPill(
                     label: viewModel.l10n.text(.currentNamespace),
                     value: appliedNamespaceText,
                     systemImage: "scope",
-                    accent: .blue
+                    accent: AppTheme.accentBlue
                 )
             }
             Button(viewModel.settings.language == .zhHans ? "EN" : "中文") {
                 viewModel.toggleLanguage()
             }
-            .buttonStyle(.bordered)
-            .controlSize(.regular)
+            .buttonStyle(.plain)
+            .font(.callout.weight(.semibold))
+            .frame(minWidth: 46, minHeight: 32)
+            .background(AppTheme.control, in: RoundedRectangle(cornerRadius: 8))
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(AppTheme.border))
             Button {
                 viewModel.showingEditor = false
                 viewModel.editingRecord = nil
                 viewModel.showingSettings = true
             } label: {
                 Image(systemName: "gearshape")
+                    .frame(width: 32, height: 32)
+                    .contentShape(Rectangle())
             }
-            .buttonStyle(.bordered)
-            .controlSize(.regular)
+            .buttonStyle(.plain)
+            .background(AppTheme.control, in: RoundedRectangle(cornerRadius: 8))
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(AppTheme.border))
             .help(viewModel.l10n.text(.preferences))
         }
-        .padding(.horizontal, 18)
-        .frame(height: 54)
+        .padding(.horizontal, 16)
+        .frame(height: 58)
+        .background(AppTheme.surface.opacity(0.96))
     }
 
     private var appliedNamespaceText: String {
@@ -99,10 +122,12 @@ struct KubeSwitcherRootView: View {
     }
 
     private func statusPill(label: String, value: String, systemImage: String, accent: Color) -> some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 9) {
             Image(systemName: systemImage)
-                .font(.system(size: 13, weight: .semibold))
+                .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(accent)
+                .frame(width: 24, height: 24)
+                .background(accent.opacity(0.09), in: RoundedRectangle(cornerRadius: 7))
             VStack(alignment: .leading, spacing: 1) {
                 Text(label)
                     .font(.caption2.weight(.semibold))
@@ -114,11 +139,11 @@ struct KubeSwitcherRootView: View {
                     .truncationMode(.tail)
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .frame(maxWidth: 190, alignment: .leading)
-        .background(accent.opacity(0.10), in: RoundedRectangle(cornerRadius: 10))
-        .overlay(RoundedRectangle(cornerRadius: 10).stroke(accent.opacity(0.16), lineWidth: 1))
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .frame(width: 168, alignment: .leading)
+        .background(AppTheme.control, in: RoundedRectangle(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(accent.opacity(0.14), lineWidth: 1))
     }
 
     private func toastView(_ message: String) -> some View {
@@ -134,9 +159,9 @@ struct KubeSwitcherRootView: View {
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
-                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.primary.opacity(0.08), lineWidth: 1))
-                .shadow(color: .black.opacity(0.10), radius: 14, y: 6)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 9))
+                .overlay(RoundedRectangle(cornerRadius: 9).stroke(AppTheme.border, lineWidth: 1))
+                .shadow(color: .black.opacity(0.10), radius: 16, y: 6)
             }
             .padding(.top, 12)
             .padding(.trailing, 22)
@@ -152,20 +177,25 @@ struct SidebarView: View {
     @ObservedObject var viewModel: AppViewModel
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: 14) {
             HStack {
                 Label(viewModel.l10n.text(.environments), systemImage: "square.stack.3d.up")
-                    .font(.headline.weight(.bold))
-                    .foregroundStyle(.primary.opacity(0.62))
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary.opacity(0.66))
                 Spacer()
                 Button {
                     viewModel.editingRecord = nil
                     viewModel.showingEditor = true
                 } label: {
                     Image(systemName: "plus")
+                        .font(.system(size: 13, weight: .semibold))
+                        .frame(width: 32, height: 30)
+                        .contentShape(Rectangle())
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.large)
+                .buttonStyle(.plain)
+                .foregroundStyle(AppTheme.accent)
+                .background(AppTheme.accent.opacity(0.09), in: RoundedRectangle(cornerRadius: 8))
+                .help(viewModel.l10n.text(.addEnvironment))
             }
 
             HStack {
@@ -174,10 +204,10 @@ struct SidebarView: View {
                 TextField(viewModel.l10n.text(.searchCluster), text: $viewModel.searchText)
                     .textFieldStyle(.plain)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 11)
-            .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
-            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.primary.opacity(0.08)))
+            .padding(.horizontal, 11)
+            .padding(.vertical, 9)
+            .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 8))
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(AppTheme.border))
 
             if viewModel.groupedEnvironments.isEmpty {
                 Text(viewModel.l10n.text(.empty))
@@ -185,7 +215,7 @@ struct SidebarView: View {
                     .padding(.top, 32)
             } else {
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 14) {
+                    LazyVStack(alignment: .leading, spacing: 16) {
                         ForEach(viewModel.groupedEnvironments, id: \.0) { group, records in
                             GroupSectionView(viewModel: viewModel, group: group, records: records)
                         }
@@ -196,8 +226,9 @@ struct SidebarView: View {
             }
             Spacer()
         }
-        .padding(16)
-        .background(Color(nsColor: .controlBackgroundColor))
+        .padding(.horizontal, 14)
+        .padding(.vertical, 18)
+        .background(AppTheme.sidebar)
     }
 }
 
@@ -208,23 +239,24 @@ struct GroupSectionView: View {
     @State private var expanded = true
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 7) {
             Button {
                 expanded.toggle()
             } label: {
-                HStack {
+                HStack(spacing: 7) {
                     Image(systemName: "folder")
-                    Text(group.uppercased())
+                        .font(.system(size: 12, weight: .medium))
+                    Text(group)
+                        .lineLimit(1)
                     Text("\(records.count)")
-                        .font(.caption.weight(.bold))
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .background(.background, in: Capsule())
+                        .font(.caption2.monospacedDigit().weight(.semibold))
+                        .foregroundStyle(.secondary)
                     Spacer()
                     Image(systemName: expanded ? "chevron.down" : "chevron.right")
+                        .font(.caption.weight(.semibold))
                 }
                 .foregroundStyle(.primary.opacity(0.58))
-                .font(.callout.weight(.bold))
+                .font(.callout.weight(.semibold))
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -234,7 +266,8 @@ struct GroupSectionView: View {
                     EnvironmentRowView(viewModel: viewModel, record: record)
                     if index < records.count - 1 {
                         Divider()
-                            .padding(.horizontal, 10)
+                            .opacity(0.55)
+                            .padding(.horizontal, 12)
                     }
                 }
             }
@@ -253,11 +286,11 @@ struct EnvironmentRowView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 7) {
+            VStack(alignment: .leading, spacing: 7) {
                 HStack(spacing: 8) {
                     Text(record.name)
-                        .font(.headline.weight(.semibold))
+                        .font(.callout.weight(.semibold))
                         .foregroundStyle(selected ? Color.primary.opacity(0.92) : Color.primary.opacity(0.82))
                         .lineLimit(1)
                         .truncationMode(.tail)
@@ -281,18 +314,14 @@ struct EnvironmentRowView: View {
                     }
                     .menuStyle(.borderlessButton)
                     .opacity(hovering || selected ? 1 : 0)
-                    if selected {
-                        Circle()
-                            .fill(.indigo)
-                            .frame(width: 8, height: 8)
-                    }
                 }
                 Text(record.description.isEmpty ? record.summary.contextName : record.description)
-                    .foregroundStyle(.primary.opacity(0.52))
-                    .lineLimit(2)
+                    .font(.callout)
+                    .foregroundStyle(AppTheme.mutedText)
+                    .lineLimit(1)
                 Text("ns: \(record.currentNamespace ?? "default")")
-                    .font(.system(.callout, design: .monospaced).weight(.semibold))
-                    .foregroundStyle(.primary.opacity(0.48))
+                    .font(.system(.caption, design: .monospaced).weight(.medium))
+                    .foregroundStyle(.primary.opacity(0.46))
                     .lineLimit(1)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -319,15 +348,23 @@ struct EnvironmentRowView: View {
                 .overlay(RoundedRectangle(cornerRadius: 8).stroke(.red.opacity(0.35)))
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 11)
         .background(
             selected
-                ? Color.indigo.opacity(0.065)
-                : hovering ? Color.primary.opacity(0.035) : Color.clear,
+                ? AppTheme.accent.opacity(0.065)
+                : hovering ? Color.primary.opacity(0.026) : Color.clear,
             in: RoundedRectangle(cornerRadius: 8)
         )
-        .overlay(RoundedRectangle(cornerRadius: 8).stroke(selected ? Color.indigo.opacity(0.28) : Color.clear))
+        .overlay(alignment: .leading) {
+            if selected {
+                RoundedRectangle(cornerRadius: 1.5)
+                    .fill(AppTheme.accent)
+                    .frame(width: 3)
+                    .padding(.vertical, 10)
+            }
+        }
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(selected ? AppTheme.accent.opacity(0.20) : Color.clear))
         .onHover { hovering = $0 }
     }
 }
@@ -350,29 +387,27 @@ struct DetailView: View {
                 Spacer()
             }
         }
+        .background(AppTheme.canvas)
     }
 
     private func header(_ record: EnvironmentRecord) -> some View {
-        HStack(alignment: .top) {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack {
+        HStack(alignment: .center) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) {
                     Text(viewModel.l10n.text(.activeCluster))
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.primary.opacity(0.58))
-                    Text("•")
-                        .foregroundStyle(.primary.opacity(0.35))
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(AppTheme.mutedText)
                     KindBadge(kind: record.kind)
-                    Text("•")
-                        .foregroundStyle(.primary.opacity(0.35))
                     Text(record.group)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
-                        .background(Color.primary.opacity(0.055), in: RoundedRectangle(cornerRadius: 6))
-                        .foregroundStyle(.primary.opacity(0.55))
+                        .font(.caption.weight(.medium))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(AppTheme.control, in: RoundedRectangle(cornerRadius: 6))
+                        .foregroundStyle(AppTheme.mutedText)
                 }
                 Text(record.name)
-                    .font(.system(.title, design: .rounded).weight(.semibold))
-                    .foregroundStyle(.primary.opacity(0.88))
+                    .font(.system(.title2, design: .rounded).weight(.semibold))
+                    .foregroundStyle(.primary.opacity(0.86))
             }
             Spacer()
             Button {
@@ -381,43 +416,48 @@ struct DetailView: View {
                 Label(viewModel.l10n.text(.applyConfig), systemImage: "checkmark.circle")
             }
             .buttonStyle(.borderedProminent)
-            .controlSize(.large)
+            .controlSize(.regular)
+            .tint(AppTheme.accent)
             .disabled(viewModel.isBusy)
         }
-        .padding(.horizontal, 34)
-        .padding(.vertical, 24)
+        .padding(.horizontal, 28)
+        .padding(.vertical, 20)
+        .background(AppTheme.surface)
     }
 
     private func namespaces(_ record: EnvironmentRecord) -> some View {
-        VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: 14) {
             HStack {
-                Text(viewModel.l10n.text(.namespaceSelect).uppercased())
-                    .font(.headline.weight(.bold))
-                    .foregroundStyle(.primary.opacity(0.62))
+                Text(viewModel.l10n.text(.namespaceSelect))
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary.opacity(0.64))
                 Text("\(viewModel.namespaces.count) Total")
-                    .font(.callout.weight(.bold))
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(Color.primary.opacity(0.06), in: Capsule())
+                    .font(.caption.monospacedDigit().weight(.semibold))
+                    .foregroundStyle(AppTheme.mutedText)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(AppTheme.control, in: Capsule())
                 Button {
                     viewModel.refreshNamespacesForSelected()
                 } label: {
                     Image(systemName: "arrow.clockwise")
-                        .font(.system(size: 14, weight: .bold))
+                        .font(.system(size: 12, weight: .semibold))
+                        .frame(width: 28, height: 26)
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
+                .buttonStyle(.plain)
+                .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 7))
+                .overlay(RoundedRectangle(cornerRadius: 7).stroke(AppTheme.border))
                 .disabled(viewModel.namespaceLoadingEnvironmentID == record.id)
                 .help(viewModel.l10n.text(.refreshNamespaces))
                 if viewModel.namespaceLoadingEnvironmentID == record.id {
                     ProgressView()
                         .controlSize(.small)
                     Text(viewModel.l10n.text(.namespaceLoading))
-                        .font(.callout)
+                        .font(.caption)
                         .foregroundStyle(.secondary)
                 } else if let namespaceLoadError = viewModel.namespaceLoadError {
                     Text("\(viewModel.l10n.text(.namespaceUnavailable)): \(namespaceLoadError)")
-                        .font(.callout)
+                        .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
@@ -428,11 +468,11 @@ struct DetailView: View {
                     TextField(viewModel.l10n.text(.filterNamespaces), text: $viewModel.namespaceFilter)
                         .textFieldStyle(.plain)
                 }
-                .frame(width: 300)
+                .frame(width: 280)
                 .padding(.horizontal, 11)
-                .padding(.vertical, 10)
-                .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
-                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.primary.opacity(0.08)))
+                .padding(.vertical, 8)
+                .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 8))
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(AppTheme.border))
             }
 
             ScrollView {
@@ -442,7 +482,7 @@ struct DetailView: View {
                         .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, minHeight: 160)
                 } else {
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 160), spacing: 10)], spacing: 10) {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 170), spacing: 10)], spacing: 10) {
                         ForEach(viewModel.filteredNamespaces) { namespace in
                             NamespaceCard(
                                 namespace: namespace,
@@ -455,12 +495,12 @@ struct DetailView: View {
                     .padding(.trailing, 6)
                 }
             }
-            .frame(height: 340)
+            .frame(minHeight: 220, maxHeight: .infinity)
             .scrollIndicators(.hidden)
         }
-        .padding(.horizontal, 32)
-        .padding(.top, 24)
-        .padding(.bottom, 20)
+        .padding(.horizontal, 28)
+        .padding(.top, 20)
+        .padding(.bottom, 18)
         .frame(maxHeight: .infinity, alignment: .top)
     }
 
@@ -483,11 +523,11 @@ struct KindBadge: View {
 
     var body: some View {
         Text(kind == .prod ? "PROD" : "TEST")
-            .font(.caption.weight(.heavy))
-            .foregroundStyle(kind == .prod ? .indigo : .blue)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .background(kind == .prod ? Color.indigo.opacity(0.095) : Color.blue.opacity(0.095), in: Capsule())
+            .font(.caption2.weight(.bold))
+            .foregroundStyle(kind == .prod ? AppTheme.accent : AppTheme.accentBlue)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(kind == .prod ? AppTheme.accent.opacity(0.09) : AppTheme.accentBlue.opacity(0.09), in: Capsule())
     }
 }
 
@@ -500,45 +540,45 @@ struct NamespaceCard: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 0) {
-                VStack(alignment: .leading, spacing: 7) {
+                VStack(alignment: .leading, spacing: 6) {
                     HStack(spacing: 8) {
                         Text(namespace.name)
-                            .font(.system(.callout, design: .monospaced).weight(.bold))
-                            .foregroundStyle(selected ? Color.indigo.opacity(0.95) : Color.primary.opacity(0.86))
+                            .font(.system(.callout, design: .monospaced).weight(.semibold))
+                            .foregroundStyle(selected ? AppTheme.accent : Color.primary.opacity(0.82))
                             .lineLimit(1)
                             .truncationMode(.middle)
                         Circle()
                             .fill(statusColor)
-                            .frame(width: 7.5, height: 7.5)
+                            .frame(width: 7, height: 7)
                             .help(namespace.status)
                     }
                     Text("AGE \(ageText)")
-                        .font(.caption.monospacedDigit().weight(.medium))
-                        .foregroundStyle(.primary.opacity(0.44))
+                        .font(.caption2.monospacedDigit().weight(.medium))
+                        .foregroundStyle(.primary.opacity(0.42))
                         .lineLimit(1)
                 }
                 Spacer()
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            .frame(height: 62)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .frame(height: 56)
             .background(
                 selected
-                    ? Color.indigo.opacity(0.045)
-                    : hovering ? Color.primary.opacity(0.022) : Color(nsColor: .textBackgroundColor),
+                    ? AppTheme.accent.opacity(0.05)
+                    : hovering ? Color.primary.opacity(0.025) : AppTheme.surface,
                 in: RoundedRectangle(cornerRadius: 8)
             )
             .overlay(alignment: .leading) {
                 if selected {
                     RoundedRectangle(cornerRadius: 1.5)
-                        .fill(Color.indigo.opacity(0.85))
+                        .fill(AppTheme.accent.opacity(0.88))
                         .frame(width: 3)
                         .padding(.vertical, 10)
                 }
             }
             .overlay(
                 RoundedRectangle(cornerRadius: 8)
-                    .stroke(selected ? Color.indigo.opacity(0.55) : Color.primary.opacity(0.08), lineWidth: selected ? 1.2 : 1)
+                    .stroke(selected ? AppTheme.accent.opacity(0.30) : AppTheme.border, lineWidth: 1)
             )
         }
         .buttonStyle(.plain)
@@ -572,10 +612,19 @@ struct NamespaceCard: View {
 }
 
 struct EnvironmentEditorView: View {
+    private enum GroupSelectionMode: String {
+        case createNew
+        case useExisting
+    }
+
     @ObservedObject var viewModel: AppViewModel
     let record: EnvironmentRecord?
 
-    @State private var group: String
+    @State private var groupSelectionMode: GroupSelectionMode
+    @State private var newGroup: String
+    @State private var selectedExistingGroup: String
+    @State private var groupFilter = ""
+    @State private var showingGroupPicker = false
     @State private var name: String
     @State private var kind: EnvironmentKind
     @State private var description: String
@@ -587,7 +636,9 @@ struct EnvironmentEditorView: View {
     init(viewModel: AppViewModel, record: EnvironmentRecord?) {
         self.viewModel = viewModel
         self.record = record
-        _group = State(initialValue: record?.group ?? EnvironmentStore.defaultGroup)
+        _groupSelectionMode = State(initialValue: record == nil ? .createNew : .useExisting)
+        _newGroup = State(initialValue: record == nil ? EnvironmentStore.defaultGroup : "")
+        _selectedExistingGroup = State(initialValue: record?.group ?? "")
         _name = State(initialValue: record?.name ?? "")
         _kind = State(initialValue: record?.kind ?? .test)
         _description = State(initialValue: record?.description ?? "")
@@ -606,10 +657,12 @@ struct EnvironmentEditorView: View {
                     viewModel.editingRecord = nil
                 } label: {
                     Image(systemName: "xmark")
+                        .font(.system(size: 11, weight: .semibold))
+                        .frame(width: 28, height: 28)
                 }
                 .buttonStyle(.plain)
-                .font(.title3)
                 .foregroundStyle(.secondary)
+                .background(AppTheme.control, in: RoundedRectangle(cornerRadius: 7))
             }
             .padding(.horizontal, 22)
             .padding(.vertical, 18)
@@ -618,13 +671,12 @@ struct EnvironmentEditorView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    HStack(spacing: 16) {
-                        Field(label: viewModel.l10n.text(.group), required: true) {
-                            TextField(EnvironmentStore.defaultGroup, text: $group)
-                        }
-                        Field(label: viewModel.l10n.text(.name), required: true) {
-                            TextField("minikube, aliyun-prod", text: $name)
-                        }
+                    Field(label: viewModel.l10n.text(.group), required: true) {
+                        groupSelector
+                    }
+
+                    Field(label: viewModel.l10n.text(.name), required: true) {
+                        TextField("minikube, aliyun-prod", text: $name)
                     }
 
                     HStack(spacing: 16) {
@@ -641,9 +693,9 @@ struct EnvironmentEditorView: View {
                     }
 
                     HStack {
-                        Text(viewModel.l10n.text(.source).uppercased())
+                        Text(viewModel.l10n.text(.source))
                             .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(AppTheme.mutedText)
                         Spacer()
                     }
 
@@ -655,11 +707,8 @@ struct EnvironmentEditorView: View {
 
                     if sourceType == .importedFile {
                         fileImportPrompt
-                        if !configText.isEmpty {
-                            configEditor(height: 120)
-                        }
                     } else {
-                        configEditor(height: 180)
+                        configEditor(height: 160)
                     }
 
                     if record != nil && configText.isEmpty {
@@ -669,6 +718,7 @@ struct EnvironmentEditorView: View {
                 }
                 .padding(22)
             }
+            .background(AppTheme.canvas)
 
             Divider()
 
@@ -683,7 +733,7 @@ struct EnvironmentEditorView: View {
                     let draft = EnvironmentDraft(
                         id: record?.id,
                         name: name,
-                        group: group,
+                        group: selectedGroup,
                         kind: kind,
                         description: description,
                         kubeConfig: configText,
@@ -693,12 +743,16 @@ struct EnvironmentEditorView: View {
                 }
                 .keyboardShortcut(.defaultAction)
                 .buttonStyle(.borderedProminent)
-                .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || configText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .disabled(selectedGroup.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    || name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    || configText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
             .padding(.horizontal, 22)
             .padding(.vertical, 16)
+            .background(AppTheme.surface)
         }
-        .background(.background, in: RoundedRectangle(cornerRadius: 12))
+        .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 10))
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(AppTheme.border))
         .fileImporter(isPresented: $importingFile, allowedContentTypes: kubeConfigContentTypes, allowsMultipleSelection: false) { result in
             do {
                 let urls = try result.get()
@@ -726,6 +780,109 @@ struct EnvironmentEditorView: View {
         }
     }
 
+    private var existingGroups: [String] {
+        Array(Set(viewModel.environments.map(\.group).filter {
+            !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        })).sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+    }
+
+    private var filteredGroups: [String] {
+        guard !groupFilter.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return existingGroups
+        }
+        return existingGroups.filter { $0.localizedCaseInsensitiveContains(groupFilter) }
+    }
+
+    private var selectedGroup: String {
+        groupSelectionMode == .createNew ? newGroup : selectedExistingGroup
+    }
+
+    private var groupSelector: some View {
+        HStack(spacing: 8) {
+            Picker("", selection: $groupSelectionMode) {
+                Text(viewModel.l10n.text(.createGroup)).tag(GroupSelectionMode.createNew)
+                Text(viewModel.l10n.text(.useExistingGroup)).tag(GroupSelectionMode.useExisting)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .frame(width: 230)
+            .onChange(of: groupSelectionMode) { mode in
+                guard mode == .useExisting, selectedExistingGroup.isEmpty else { return }
+                selectedExistingGroup = existingGroups.first ?? ""
+            }
+
+            if groupSelectionMode == .createNew {
+                TextField(EnvironmentStore.defaultGroup, text: $newGroup)
+            } else {
+                Button {
+                    groupFilter = ""
+                    showingGroupPicker = true
+                } label: {
+                    HStack(spacing: 8) {
+                        Text(selectedExistingGroup.isEmpty ? viewModel.l10n.text(.selectGroup) : selectedExistingGroup)
+                            .foregroundStyle(selectedExistingGroup.isEmpty ? .secondary : .primary)
+                            .lineLimit(1)
+                        Spacer(minLength: 4)
+                        Image(systemName: "chevron.down")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.horizontal, 9)
+                    .frame(maxWidth: .infinity, minHeight: 22)
+                    .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 7))
+                    .overlay(RoundedRectangle(cornerRadius: 7).stroke(AppTheme.border))
+                }
+                .buttonStyle(.plain)
+                .popover(isPresented: $showingGroupPicker, arrowEdge: .bottom) {
+                    existingGroupPicker
+                }
+            }
+        }
+    }
+
+    private var existingGroupPicker: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            TextField(viewModel.l10n.text(.filterGroups), text: $groupFilter)
+                .textFieldStyle(.roundedBorder)
+
+            if filteredGroups.isEmpty {
+                Text(viewModel.l10n.text(.noMatchingGroups))
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, minHeight: 64)
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 2) {
+                        ForEach(filteredGroups, id: \.self) { existingGroup in
+                            Button {
+                                selectedExistingGroup = existingGroup
+                                showingGroupPicker = false
+                            } label: {
+                                HStack {
+                                    Text(existingGroup)
+                                        .lineLimit(1)
+                                    Spacer()
+                                    if selectedExistingGroup == existingGroup {
+                                        Image(systemName: "checkmark")
+                                            .foregroundStyle(.tint)
+                                    }
+                                }
+                                .contentShape(Rectangle())
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 7)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+                .frame(maxHeight: 180)
+            }
+        }
+        .padding(12)
+        .frame(width: 280)
+        .background(AppTheme.surface)
+    }
+
     private var fileImportPrompt: some View {
         Button {
             importingFile = true
@@ -733,7 +890,7 @@ struct EnvironmentEditorView: View {
             VStack(spacing: 8) {
                 Image(systemName: "doc.badge.plus")
                     .font(.title2)
-                    .foregroundStyle(.indigo)
+                    .foregroundStyle(AppTheme.accent)
                 Text(localText(zh: "点击区域选择 kubeconfig 文件", en: "Click to choose a kubeconfig file"))
                     .font(.headline.weight(.semibold))
                     .foregroundStyle(.primary)
@@ -743,15 +900,15 @@ struct EnvironmentEditorView: View {
                 if let importedFileName {
                     Text(localText(zh: "已载入: \(importedFileName)", en: "Loaded: \(importedFileName)"))
                         .font(.callout.weight(.semibold))
-                        .foregroundStyle(.indigo)
+                        .foregroundStyle(AppTheme.accent)
                 }
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 20)
-            .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
+            .frame(height: 160)
+            .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 8))
             .overlay(
                 RoundedRectangle(cornerRadius: 8)
-                    .stroke(Color.indigo.opacity(0.28), style: StrokeStyle(lineWidth: 1, dash: [6, 5]))
+                    .stroke(AppTheme.accent.opacity(0.24), style: StrokeStyle(lineWidth: 1, dash: [6, 5]))
             )
         }
         .buttonStyle(.plain)
@@ -764,8 +921,8 @@ struct EnvironmentEditorView: View {
             .scrollContentBackground(.hidden)
             .padding(10)
             .frame(height: height)
-            .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
-            .overlay(RoundedRectangle(cornerRadius: 8).stroke(.quaternary))
+            .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 8))
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(AppTheme.border))
     }
 
     private var kubeConfigContentTypes: [UTType] {
@@ -813,10 +970,12 @@ struct SettingsView: View {
                     viewModel.showingSettings = false
                 } label: {
                     Image(systemName: "xmark")
+                        .font(.system(size: 11, weight: .semibold))
+                        .frame(width: 28, height: 28)
                 }
                 .buttonStyle(.plain)
-                .font(.title3)
                 .foregroundStyle(.secondary)
+                .background(AppTheme.control, in: RoundedRectangle(cornerRadius: 7))
             }
             .padding(.horizontal, 22)
             .padding(.vertical, 18)
@@ -895,6 +1054,7 @@ struct SettingsView: View {
                 }
             }
             .padding(22)
+            .background(AppTheme.canvas)
 
             Divider()
 
@@ -928,8 +1088,10 @@ struct SettingsView: View {
             }
             .padding(.horizontal, 22)
             .padding(.vertical, 16)
+            .background(AppTheme.surface)
         }
-        .background(.background, in: RoundedRectangle(cornerRadius: 12))
+        .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 10))
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(AppTheme.border))
     }
 
     private func modifierButton(_ modifier: HotKeyModifier) -> some View {
@@ -947,12 +1109,12 @@ struct SettingsView: View {
         .buttonStyle(.plain)
         .foregroundStyle(hotKeyModifiers.contains(modifier) ? Color.white : Color.primary.opacity(0.72))
         .background(
-            hotKeyModifiers.contains(modifier) ? Color.accentColor : Color(nsColor: .controlBackgroundColor),
+            hotKeyModifiers.contains(modifier) ? AppTheme.accent : AppTheme.control,
             in: RoundedRectangle(cornerRadius: 7)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 7)
-                .stroke(hotKeyModifiers.contains(modifier) ? Color.accentColor.opacity(0.15) : Color.black.opacity(0.08), lineWidth: 1)
+                .stroke(hotKeyModifiers.contains(modifier) ? AppTheme.accent.opacity(0.15) : AppTheme.border, lineWidth: 1)
         )
         .help(viewModel.l10n.text(.modifiers))
     }
@@ -968,7 +1130,7 @@ struct Field<Content: View>: View {
             HStack(spacing: 3) {
                 Text(label)
                     .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.primary.opacity(0.58))
+                    .foregroundStyle(AppTheme.mutedText)
                 if required { Text("*").foregroundStyle(.red) }
             }
             content

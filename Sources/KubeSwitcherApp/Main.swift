@@ -2,6 +2,13 @@ import AppKit
 import KubeSwitcherCore
 import SwiftUI
 
+@MainActor
+private final class FirstMouseHostingView<Content: View>: NSHostingView<Content> {
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
+        true
+    }
+}
+
 @main
 @MainActor
 final class KubeSwitcherLauncher {
@@ -69,7 +76,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         window.center()
         window.isReleasedWhenClosed = false
         window.delegate = self
-        window.contentView = NSHostingView(rootView: root)
+        window.contentView = FirstMouseHostingView(rootView: root)
         self.window = window
     }
 
