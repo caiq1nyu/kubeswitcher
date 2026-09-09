@@ -18,7 +18,66 @@ struct KubeSwitcherCoreChecks {
         try strictSummaryParsingRejectsMissingCurrentContext()
         try strictSummaryParsingRejectsMissingClusterReference()
         try kubectlLocatorFindsHomebrewWhenGuiPathIsMinimal()
+        try await environmentArchiveRoundTripAndConflicts()
         print("KubeSwitcherCoreChecks passed")
+    }
+
+    private static func environmentArchiveRoundTripAndConflicts() async throws {
+        let source = try TestHarness()
+        let destination = try TestHarness()
+        let summary = KubeConfigSummary(apiServer: "https://sample:6443", clusterName: "sample", contextName: "sample", userName: "sample", sourceType: .pastedText)
+        source.kubectl.validationResult = .success(summary)
+        destination.kubectl.validationResult = .success(summary)
+        let first = try await source.store.saveEnvironment(draft: EnvironmentDraft(
+            id: nil, name: "shared", group: "team", kind: .prod, description: "shared config",
+            kubeConfig: SampleConfigs.production, sourceType: .pastedText
+        ))
+        let second = try await source.store.saveEnvironment(draft: EnvironmentDraft(
+            id: nil, name: "shared", group: "another team", kind: .test, description: "",
+            kubeConfig: SampleConfigs.minikube, sourceType: .pastedText
+        ))
+        try source.store.updateNamespace(environmentID: first.id, namespace: "production")
+        let selected = try source.store.exportEnvironments(ids: [first.id])
+        let imported = try await destination.store.importEnvironments(data: selected)
+        try check(imported.succeeded == 1 && imported.failed == 0, "selected export imports only selected environment")
+        let record = try destination.store.loadEnvironments()[0]
+        try check(record.id != first.id, "import assigns fresh local IDs")
+        try check(record.kind == .prod && record.description == first.description && record.currentNamespace == "production", "import preserves environment fields")
+        try check(try destination.store.kubeConfig(id: record.id) == SampleConfigs.production, "import preserves secret")
+        try check(try destination.store.loadSettings().activeEnvironmentID == nil, "import must not activate environments")
+        let all = try source.store.exportEnvironments(ids: [first.id, second.id])
+        let merged = try await destination.store.importEnvironments(data: all)
+        try check(merged.succeeded == 1 && merged.failed == 1, "same group/name is ignored; same name in different group is allowed")
+        try check(try destination.store.loadEnvironments().first(where: { $0.id == record.id }) == record, "conflict must not modify existing record")
+
+        var object = try JSONSerialization.jsonObject(with: selected) as! [String: Any]
+        let entry = (object["environments"] as! [[String: Any]])[0]
+        var invalid = entry
+        invalid["name"] = "  "
+        var valid = entry
+        valid["name"] = "new"
+        object["environments"] = [invalid, valid, valid]
+        let partial = try await destination.store.importEnvironments(data: JSONSerialization.data(withJSONObject: object))
+        try check(partial.succeeded == 1 && partial.failed == 2, "invalid entry and within-file duplicate do not stop import")
+
+        object["version"] = 999
+        do {
+            _ = try await destination.store.importEnvironments(data: JSONSerialization.data(withJSONObject: object))
+            throw CheckFailure("unsupported version must fail")
+        } catch KubeSwitcherError.persistenceFailure { }
+        do {
+            _ = try await destination.store.importEnvironments(data: Data("not json".utf8))
+            throw CheckFailure("malformed file must fail")
+        } catch is DecodingError { }
+        try check(try destination.store.loadEnvironments().count == 3, "invalid files leave store unchanged")
+
+        let empty = try await destination.store.importEnvironments(data: source.store.exportEnvironments(ids: []))
+        try check(empty.succeeded == 0 && empty.failed == 0, "empty archive is harmless")
+        try source.secretStore.deleteConfig(id: first.id)
+        do {
+            _ = try source.store.exportEnvironments(ids: [first.id])
+            throw CheckFailure("missing secret must fail export")
+        } catch KubeSwitcherError.missingKubeConfigSecret { }
     }
 
     private static func addingEnvironmentUsesDefaultGroupWhenEmpty() async throws {

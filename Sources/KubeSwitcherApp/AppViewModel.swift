@@ -1,6 +1,7 @@
 import AppKit
 import Foundation
 import KubeSwitcherCore
+import UniformTypeIdentifiers
 
 @MainActor
 final class AppViewModel: ObservableObject {
@@ -14,10 +15,13 @@ final class AppViewModel: ObservableObject {
     @Published var namespaceFilter = ""
     @Published var showingEditor = false
     @Published var showingSettings = false
+    @Published var showingExport = false
+    @Published var isTransferring = false
     @Published var editingRecord: EnvironmentRecord?
     @Published var deleteTarget: EnvironmentRecord?
     @Published var alertMessage: String?
     @Published var toastMessage: String?
+    @Published var toastHasFailures = false
     @Published var appliedNamespace: String?
     @Published var isBusy = false
     @Published var appPreferences: AppPreferences
@@ -212,11 +216,12 @@ final class AppViewModel: ObservableObject {
         }
     }
 
-    private func showToast(_ message: String) {
+    private func showToast(_ message: String, hasFailures: Bool = false, duration: UInt64 = 2_000_000_000) {
+        toastHasFailures = hasFailures
         toastTask?.cancel()
         toastMessage = message
         toastTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            try? await Task.sleep(nanoseconds: duration)
             guard !Task.isCancelled else { return }
             await MainActor.run {
                 if self?.toastMessage == message {
@@ -224,6 +229,79 @@ final class AppViewModel: ObservableObject {
                 }
             }
         }
+    }
+
+    func transferText(zh: String, en: String) -> String {
+        settings.language == .zhHans ? zh : en
+    }
+
+    func exportEnvironments(ids: Set<UUID>) {
+        guard !isBusy, !ids.isEmpty else { return }
+        let panel = NSSavePanel()
+        panel.level = .floating
+        panel.allowedContentTypes = [.json]
+        panel.nameFieldStringValue = "kubeswitcher-environments.json"
+        panel.canCreateDirectories = true
+        panel.title = transferText(zh: "导出环境", en: "Export environments")
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            let data = try store.exportEnvironments(ids: ids)
+            try data.write(to: url, options: .atomic)
+            showingExport = false
+            showToast(transferText(zh: "导出完成，成功\(ids.count)个", en: "Export complete, \(ids.count) succeeded"))
+        } catch {
+            showToast(transferText(zh: "导出失败：", en: "Export failed: ") + error.localizedDescription, hasFailures: true)
+        }
+    }
+
+    func importEnvironments() async {
+        guard !isBusy else { return }
+        let panel = NSOpenPanel()
+        panel.level = .floating
+        panel.allowedContentTypes = [.json]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.title = transferText(zh: "导入环境", en: "Import environments")
+        let window = NSApp.keyWindow
+        let response = await withCheckedContinuation { continuation in
+            if let window {
+                panel.beginSheetModal(for: window) { continuation.resume(returning: $0) }
+            } else {
+                panel.begin { continuation.resume(returning: $0) }
+            }
+        }
+        panel.orderOut(nil)
+        guard response == .OK, let url = panel.url else { return }
+        window?.makeKeyAndOrderFront(nil)
+        await importEnvironments(from: url)
+    }
+
+    func importEnvironments(from url: URL) async {
+        guard !isBusy else { return }
+        isBusy = true
+        isTransferring = true
+        var message: String
+        var hasFailures: Bool
+        let accessed = url.startAccessingSecurityScopedResource()
+        defer { if accessed { url.stopAccessingSecurityScopedResource() } }
+        do {
+            let result = try await store.importEnvironments(data: Data(contentsOf: url))
+            environments = try store.loadEnvironments()
+            message = transferText(
+                zh: "导入完成，成功\(result.succeeded)个",
+                en: "Import complete, \(result.succeeded) succeeded"
+            )
+            if result.failed > 0 {
+                message += transferText(zh: "，失败\(result.failed)个", en: ", \(result.failed) failed")
+            }
+            hasFailures = result.failed > 0
+        } catch {
+            message = transferText(zh: "导入失败：", en: "Import failed: ") + error.localizedDescription
+            hasFailures = true
+        }
+        isBusy = false
+        isTransferring = false
+        showToast(message, hasFailures: hasFailures, duration: 4_000_000_000)
     }
 
     func saveDraft(_ draft: EnvironmentDraft) async {

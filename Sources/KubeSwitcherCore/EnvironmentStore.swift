@@ -58,6 +58,10 @@ public final class EnvironmentStore: @unchecked Sendable {
 
     @discardableResult
     public func saveEnvironment(draft: EnvironmentDraft) async throws -> EnvironmentRecord {
+        try await saveEnvironment(draft: draft, initialNamespace: nil)
+    }
+
+    private func saveEnvironment(draft: EnvironmentDraft, initialNamespace: String?) async throws -> EnvironmentRecord {
         let trimmedName = draft.name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedName.isEmpty else {
             throw KubeSwitcherError.invalidKubeConfig("environment name is required")
@@ -90,7 +94,7 @@ public final class EnvironmentStore: @unchecked Sendable {
                 group: normalizedGroup,
                 kind: draft.kind,
                 description: draft.description,
-                currentNamespace: nil,
+                currentNamespace: initialNamespace,
                 summary: summary,
                 createdAt: now,
                 updatedAt: now
@@ -115,6 +119,47 @@ public final class EnvironmentStore: @unchecked Sendable {
             throw error
         }
         return record
+    }
+
+    public func exportEnvironments(ids: Set<UUID>) throws -> Data {
+        let records = try loadEnvironments().filter { ids.contains($0.id) }
+        let entries = try records.map { record in
+            EnvironmentArchive.Entry(
+                name: record.name, group: record.group, kind: record.kind,
+                description: record.description, currentNamespace: record.currentNamespace,
+                kubeConfig: try kubeConfig(id: record.id)
+            )
+        }
+        return try encoder.encode(EnvironmentArchive(environments: entries))
+    }
+
+    public func importEnvironments(data: Data) async throws -> EnvironmentImportResult {
+        let archive = try decoder.decode(EnvironmentArchive.self, from: data)
+        guard archive.format == "kubeswitcher", archive.version == 1 else {
+            throw KubeSwitcherError.persistenceFailure("Unsupported KubeSwitcher export format or version")
+        }
+        var result = EnvironmentImportResult()
+        for entry in archive.environments {
+            do {
+                let name = entry.name.trimmingCharacters(in: .whitespacesAndNewlines)
+                let group = Self.normalizedGroup(entry.group)
+                let existing = try loadEnvironments()
+                if existing.contains(where: { $0.group == group && $0.name == name }) {
+                    result.failed += 1
+                    continue
+                }
+                // Validate locally, then persist metadata and secret together using the normal save path.
+                _ = try await saveEnvironment(draft: EnvironmentDraft(
+                    id: nil, name: name, group: group, kind: entry.kind,
+                    description: entry.description, kubeConfig: entry.kubeConfig,
+                    sourceType: .importedFile
+                ), initialNamespace: entry.currentNamespace)
+                result.succeeded += 1
+            } catch {
+                result.failed += 1
+            }
+        }
+        return result
     }
 
     public func deleteEnvironment(id: UUID) throws {

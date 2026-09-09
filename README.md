@@ -33,6 +33,16 @@ Before writing, it creates a timestamped backup next to that file.
 
 `kubectl` is required. KubeSwitcher uses your local `kubectl` to validate kubeconfigs and list namespaces.
 
+## Import and Export
+
+Use the share menu to the left of Settings:
+
+- **Export** opens a grouped selection tree with all environments selected, followed by the system Save dialog for a JSON file.
+- **Import** opens the system Open dialog. Entries with an existing group/name pair are skipped and counted as failures; other entries continue importing.
+- A toast reports the success count and includes the failure count only when nonzero.
+
+The versioned KubeSwitcher JSON file includes names, groups, kinds, descriptions, namespaces, and full kubeconfigs. Local preferences and the active environment are not changed. Credentials are exported in plain text; share only with trusted colleagues. Kubeconfigs referencing local certificate files or external authentication tools still require those files or tools on the receiving machine.
+
 ## Settings
 
 Open Settings from the top-right gear button. You can configure:

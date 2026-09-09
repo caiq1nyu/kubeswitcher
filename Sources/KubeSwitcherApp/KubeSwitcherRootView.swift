@@ -29,6 +29,19 @@ struct KubeSwitcherRootView: View {
                     DetailView(viewModel: viewModel)
                 }
             }
+            .disabled(viewModel.showingExport || viewModel.isTransferring)
+            if viewModel.showingExport {
+                Color.black.opacity(0.22).ignoresSafeArea()
+                EnvironmentExportView(viewModel: viewModel)
+                    .frame(width: 520, height: 480)
+                    .shadow(color: .black.opacity(0.16), radius: 28, y: 12)
+            }
+            if viewModel.isTransferring {
+                Color.black.opacity(0.22).ignoresSafeArea()
+                ProgressView(viewModel.transferText(zh: "正在导入…", en: "Importing…"))
+                    .padding(28)
+                    .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 10))
+            }
             if viewModel.showingEditor {
                 Color.black.opacity(0.22)
                     .ignoresSafeArea()
@@ -86,27 +99,56 @@ struct KubeSwitcherRootView: View {
                     accent: AppTheme.accentBlue
                 )
             }
-            Button(viewModel.settings.language == .zhHans ? "EN" : "中文") {
-                viewModel.toggleLanguage()
+            HStack(spacing: 0) {
+                Button {
+                    viewModel.toggleLanguage()
+                } label: {
+                    Text(viewModel.settings.language == .zhHans ? "EN" : "中文")
+                        .font(.callout.weight(.semibold))
+                        .frame(width: 40, height: 32)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                Menu {
+                    Button {
+                        viewModel.showingExport = true
+                    } label: {
+                        Label(viewModel.transferText(zh: "导出", en: "Export"), systemImage: "arrow.up.circle")
+                    }
+                    .disabled(viewModel.environments.isEmpty)
+                    Button {
+                        Task { await viewModel.importEnvironments() }
+                    } label: {
+                        Label(viewModel.transferText(zh: "导入", en: "Import"), systemImage: "arrow.down.circle")
+                    }
+                } label: {
+                    Image(systemName: "square.and.arrow.up")
+                }
+                .menuStyle(.button)
+                .buttonStyle(.plain)
+                .menuIndicator(.hidden)
+                .foregroundStyle(.primary.opacity(0.72))
+                .tint(.primary)
+                .frame(width: 32, height: 32)
+                .contentShape(Rectangle())
+                .help(viewModel.transferText(zh: "导入 / 导出环境", en: "Import / export environments"))
+                .disabled(viewModel.isBusy)
+                Button {
+                    viewModel.showingEditor = false
+                    viewModel.editingRecord = nil
+                    viewModel.showingSettings = true
+                } label: {
+                    Image(systemName: "gearshape")
+                        .frame(width: 32, height: 32)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help(viewModel.l10n.text(.preferences))
             }
-            .buttonStyle(.plain)
-            .font(.callout.weight(.semibold))
-            .frame(minWidth: 46, minHeight: 32)
-            .background(AppTheme.control, in: RoundedRectangle(cornerRadius: 8))
-            .overlay(RoundedRectangle(cornerRadius: 8).stroke(AppTheme.border))
-            Button {
-                viewModel.showingEditor = false
-                viewModel.editingRecord = nil
-                viewModel.showingSettings = true
-            } label: {
-                Image(systemName: "gearshape")
-                    .frame(width: 32, height: 32)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .background(AppTheme.control, in: RoundedRectangle(cornerRadius: 8))
-            .overlay(RoundedRectangle(cornerRadius: 8).stroke(AppTheme.border))
-            .help(viewModel.l10n.text(.preferences))
+            .foregroundStyle(.primary.opacity(0.72))
+            .padding(3)
+            .background(AppTheme.control, in: Capsule())
+            .overlay(Capsule().stroke(AppTheme.border))
         }
         .padding(.horizontal, 16)
         .frame(height: 58)
@@ -151,8 +193,8 @@ struct KubeSwitcherRootView: View {
             HStack {
                 Spacer()
                 HStack(spacing: 9) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(.green)
+                    Image(systemName: viewModel.toastHasFailures ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
+                        .foregroundStyle(viewModel.toastHasFailures ? .orange : .green)
                     Text(message)
                         .font(.callout.weight(.semibold))
                         .foregroundStyle(.primary.opacity(0.9))
@@ -1136,5 +1178,164 @@ struct Field<Content: View>: View {
             content
                 .textFieldStyle(.roundedBorder)
         }
+    }
+}
+
+struct EnvironmentExportView: View {
+    @ObservedObject var viewModel: AppViewModel
+    @State private var selectedIDs: Set<UUID>
+    @State private var collapsedGroups: Set<String> = []
+
+    init(viewModel: AppViewModel) {
+        self.viewModel = viewModel
+        _selectedIDs = State(initialValue: Set(viewModel.environments.map(\.id)))
+    }
+
+    private var groups: [(String, [EnvironmentRecord])] {
+        let grouped = Dictionary(grouping: viewModel.environments, by: \.group)
+        return grouped.keys.sorted().map { ($0, grouped[$0] ?? []) }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(viewModel.transferText(zh: "导出环境", en: "Export environments"))
+                        .font(.headline.weight(.semibold))
+                    Text(viewModel.transferText(zh: "选择环境，分享给你的团队", en: "Choose environments to share with your team"))
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button { viewModel.showingExport = false } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 11, weight: .semibold))
+                        .frame(width: 28, height: 28)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                .background(AppTheme.control, in: RoundedRectangle(cornerRadius: 7))
+                .help(viewModel.l10n.text(.cancel))
+            }
+            .padding(22)
+            Divider()
+            HStack {
+                Text(viewModel.transferText(zh: "环境", en: "Environments"))
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button(selectedIDs.count == viewModel.environments.count
+                    ? viewModel.transferText(zh: "取消全选", en: "Deselect all")
+                    : viewModel.transferText(zh: "全选", en: "Select all")) {
+                    if selectedIDs.count == viewModel.environments.count { selectedIDs.removeAll() }
+                    else { selectedIDs = Set(viewModel.environments.map(\.id)) }
+                }
+                .buttonStyle(.plain)
+                .font(.callout)
+                .foregroundStyle(AppTheme.accent)
+            }
+            .padding(.horizontal, 22)
+            .padding(.vertical, 12)
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 10) {
+                    ForEach(groups, id: \.0) { group, records in
+                        let ids = Set(records.map(\.id))
+                        let count = selectedIDs.intersection(ids).count
+                        DisclosureGroup(isExpanded: Binding(
+                            get: { !collapsedGroups.contains(group) },
+                            set: { expanded in
+                                if expanded { collapsedGroups.remove(group) }
+                                else { collapsedGroups.insert(group) }
+                            }
+                        )) {
+                            VStack(alignment: .leading, spacing: 0) {
+                                ForEach(records) { record in
+                                    Toggle(isOn: Binding(
+                                        get: { selectedIDs.contains(record.id) },
+                                        set: { selected in
+                                            if selected { selectedIDs.insert(record.id) }
+                                            else { selectedIDs.remove(record.id) }
+                                        }
+                                    )) {
+                                        HStack {
+                                            Text(record.name)
+                                                .lineLimit(1)
+                                                .help(record.name)
+                                            Spacer(minLength: 8)
+                                            Text(record.kind.rawValue.uppercased())
+                                                .font(.system(size: 9, weight: .medium))
+                                                .foregroundStyle(.secondary)
+                                        }
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                    }
+                                    .toggleStyle(.checkbox)
+                                    .padding(.vertical, 7)
+                                }
+                            }
+                            .padding(.leading, 18)
+                            .padding(.top, 8)
+                        } label: {
+                            Button {
+                                if count == ids.count { selectedIDs.subtract(ids) }
+                                else { selectedIDs.formUnion(ids) }
+                            } label: {
+                                HStack(spacing: 7) {
+                                    Image(systemName: count == 0 ? "square" : count == ids.count ? "checkmark.square.fill" : "minus.square.fill")
+                                        .foregroundStyle(count == 0 ? Color.secondary : AppTheme.accent)
+                                    Image(systemName: "folder")
+                                        .foregroundStyle(.secondary)
+                                    Text(group)
+                                        .font(.callout.weight(.semibold))
+                                        .lineLimit(1)
+                                        .help(group)
+                                    Spacer()
+                                    Text("\(count)/\(ids.count)")
+                                        .font(.caption.monospacedDigit())
+                                        .foregroundStyle(.secondary)
+                                        .padding(.horizontal, 6)
+                                        .padding(.vertical, 2)
+                                        .background(AppTheme.control, in: Capsule())
+                                }
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("\(group), \(count)/\(ids.count)")
+                        }
+                        .padding(12)
+                        .background(AppTheme.control.opacity(0.55), in: RoundedRectangle(cornerRadius: 8))
+                    }
+                }
+                .padding(.horizontal, 22)
+                .padding(.vertical, 8)
+            }
+            Label(viewModel.transferText(
+                zh: "包含访问凭据，请仅分享给可信任的同事。",
+                en: "Includes credentials. Share only with trusted colleagues."
+            ), systemImage: "lock")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 22)
+            .padding(.vertical, 12)
+            Divider()
+            HStack {
+                Text(viewModel.transferText(zh: "已选择 \(selectedIDs.count) 个环境", en: "\(selectedIDs.count) selected"))
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button(viewModel.l10n.text(.cancel)) { viewModel.showingExport = false }
+                    .keyboardShortcut(.cancelAction)
+                Button(viewModel.transferText(zh: "导出", en: "Export")) {
+                    viewModel.exportEnvironments(ids: selectedIDs)
+                }
+                .buttonStyle(.borderedProminent)
+                .keyboardShortcut(.defaultAction)
+                .disabled(selectedIDs.isEmpty || viewModel.isBusy)
+            }
+            .padding(.horizontal, 22)
+            .padding(.vertical, 16)
+        }
+        .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 10))
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(AppTheme.border))
     }
 }
